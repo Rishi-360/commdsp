@@ -41,10 +41,50 @@ def qam_modulate(bits, modulation_order):
 
 class OFDMTransmitter:
     """Simulates the OFDM Transmitter operations(still needs full implementation, currently a placeholder)."""
-    def __init__(self, num_subcarriers: int, cp_length: int, modulator: IModulator):
-        self.num_subcarriers = num_subcarriers
+
+# Modulation Scheme: QPSK (2 bits/symbol)
+# Number of Subcarriers (N_fft/FFT Size): N=64
+# Number of Used Subcarriers (N_data): Ndata=48 
+# Cyclic Prefix Length (N_cp): N_cp=16
+# OFDM Symbol Length (Time Domain): N_symbol=N+N_cp 
+# Channel Type: AWGN (Additive White Gaussian Noise) Channel
+# Pilot Subcarriers: None (for basic simulation
+# Error Correction Coding: None (Uncoded)
+# Simulation Parameters: Vary SNR from −5 dB to 20 dB, transmit 1,000 to 10,000 OFDM symbols per SNR point.
+    def __init__(self, fft_size: int,num_data_subcarriers: int, cp_length: int, modulator: IModulator):
+       #members of odfmtransmitter class
+        self.num_data_subcarriers = num_data_subcarriers
         self.cp_length = cp_length
         self.modulator = modulator
+        self.fft_size=fft_size
+
+        # Pre-calculate indices for data subcarriers (center-loaded for simplicity)
+        # Assuming DC (index 0) and the Nyquist frequency (N_fft/2) are unused.
+        # We need to place num_data_subcarriers symmetrically around DC.
+        
+        if num_data_subcarriers % 2 != 0:
+            raise ValueError("num_data_subcarriers must be an even number for symmetric placement around DC.")
+
+        half_data_subcarriers = self.num_data_subcarriers // 2
+        
+        # Indices for the positive frequency data subcarriers
+        # Start from 1 (avoiding DC) up to half_data_subcarriers
+        self._data_subcarrier_indices_positive = np.arange(1, half_data_subcarriers + 1)
+        
+        # Indices for the negative frequency data subcarriers (from the upper half of FFT)
+        # These are usually placed from N_fft - half_data_subcarriers to N_fft - 1
+        self._data_subcarrier_indices_negative = np.arange(self.fft_size - half_data_subcarriers, self.fft_size)
+
+        # Combine all data subcarrier indices and sort them
+        self._all_data_subcarrier_indices = np.concatenate((self._data_subcarrier_indices_positive, self._data_subcarrier_indices_negative))
+        self._all_data_subcarrier_indices.sort() # Ensure they are sorted
+
+        print(f"Transmitter initialized: FFT Size={self.fft_size}, Data Subcarriers={self.num_data_subcarriers}, CP Length={self.cp_length}")
+        print(f"Data Subcarrier Indices: {self._all_data_subcarrier_indices}")
+
+
+
+    
 
     def process(self, bits: np.ndarray) -> np.ndarray:
         """
@@ -56,14 +96,14 @@ class OFDMTransmitter:
         
         # Determine how many OFDM symbols we need to generate
         # (Assuming modulated_symbols are arranged sequentially for subcarriers)
-        # need to pad if len(modulated_symbols) is not a multiple of num_subcarriers
-        num_ofdm_blocks = len(modulated_symbols) // self.num_subcarriers
-        if len(modulated_symbols) % self.num_subcarriers != 0:
+        # need to pad if len(modulated_symbols) is not a multiple of num_data_subcarriers
+        num_ofdm_blocks = len(modulated_symbols) // self.num_data_subcarriers
+        if len(modulated_symbols) % self.num_data_subcarriers != 0:
             # Handle partial blocks, for simplicity here, we might truncate or pad
-            print(f"Warning: Number of modulated symbols ({len(modulated_symbols)}) not a multiple of subcarriers ({self.num_subcarriers}). Truncating.")
-            num_ofdm_blocks = len(modulated_symbols) // self.num_subcarriers
+            print(f"Warning: Number of modulated symbols ({len(modulated_symbols)}) not a multiple of subcarriers ({self.num_data_subcarriers}). Truncating.")
+            num_ofdm_blocks = len(modulated_symbols) // self.num_data_subcarriers
             # Or you can pad with zeros:
-            # padding_needed = self.num_subcarriers - (len(modulated_symbols) % self.num_subcarriers)
+            # padding_needed = self.num_data_subcarriers - (len(modulated_symbols) % self.num_data_subcarriers)
             # modulated_symbols = np.pad(modulated_symbols, (0, padding_needed), 'constant', constant_values=0)
             # num_ofdm_blocks += 1
 
@@ -71,13 +111,13 @@ class OFDMTransmitter:
 
         for i in range(num_ofdm_blocks):
             # Extract symbols for current OFDM block
-            current_freq_symbols = modulated_symbols[i * self.num_subcarriers : (i+1) * self.num_subcarriers]
+            current_freq_symbols = modulated_symbols[i * self.num_data_subcarriers : (i+1) * self.num_data_subcarriers]
             
             # TODO: Add pilot insertion, data/pilot mapping, DC subcarrier handling here if needed
             # For now, a simple direct IFFT
 
             # Perform IFFT to convert frequency domain symbols to time domain
-            time_domain_symbol = np.fft.ifft(current_freq_symbols, n=self.num_subcarriers)
+            time_domain_symbol = np.fft.ifft(current_freq_symbols, n=self.num_data_subcarriers)
             
             # Add Cyclic Prefix (CP)
             cp_added_symbol = np.concatenate((time_domain_symbol[-self.cp_length:], time_domain_symbol))

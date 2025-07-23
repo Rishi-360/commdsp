@@ -28,7 +28,7 @@ class AWGNChannel(IChannel):
         # Calculate standard deviation of noise for complex Gaussian noise
         # For complex noise, the total noise power is split equally between real and imaginary parts.
         # So, variance of real part = variance of imag part = noise_power / 2
-        # Standard deviation = sqrt(variance)
+        # Standard deviation = sqrt(variance) or sigma
         noise_std = np.sqrt(noise_power / 2)
         
         # Generate complex Gaussian noise
